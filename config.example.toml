@@ -1,0 +1,22 @@
+[auth]
+# set to true to use hmac based authentication.
+# if set to false, then accept all request
+use_auth = false
+# the key used in SHA256-HMAC authentication
+key = "keyusedforhmac"
+
+# Set corresponding item to false if you don't want to enable some test
+[api]
+resolve = true
+ping = true
+tcping = true
+mtr = true
+speed = true
+
+[site]
+# HTTPS Public key
+cert = ""
+# HTTPS Private key
+key = ""
+# listening address and port
+listen = ":8082"
