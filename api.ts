@@ -98,7 +98,7 @@ export interface MtrPEntry {
 
 export interface MtrP {
   resolved: string; // ip selected to mtr
-  data: MtrPEntry[][] | null;
+  data: (MtrPEntry[] | null)[];
 }
 
 

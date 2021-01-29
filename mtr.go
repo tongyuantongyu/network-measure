@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"net"
 	"network-measure/icmp"
@@ -42,6 +41,7 @@ func rDNSLookup(ip string) string {
 }
 
 type MTRResult struct {
+	Probe  uint64
 	Hop    uint64
 	Result *icmp.Result
 }
@@ -79,26 +79,34 @@ func mtr(q *MtrQ) (*MtrP, error) {
 
 	r := MtrP{
 		Resolved: addr.String(),
-		Data:     make([][]MtrPEntry, q.MaxHop),
+		Data:     make([][]MtrPEntry, q.Times),
+	}
+
+	for i := uint64(0); i < q.Times; i++ {
+		r.Data[i] = make([]MtrPEntry, q.MaxHop)
 	}
 
 	resultPipe := make(chan MTRResult)
+	finishPipe := make(chan struct{})
 	go func() {
 		for result := range resultPipe {
-			if result.Result.Code == 256 {
-				continue
+			ip := result.Result.AddrIP.String()
+
+			entry := &r.Data[result.Probe][result.Hop]
+			entry.Code = result.Result.Code
+			if entry.Code != 256 {
+				entry.Address = ip
+				entry.RDNS = rDNSLookup(ip)
+				entry.Latency = float64(result.Result.Latency) / float64(time.Millisecond)
 			}
 
-			fmt.Printf("{%d}, {%+v}\n", result.Hop, *result.Result)
-
-			ip := result.Result.AddrIP.String()
-			r.Data[result.Hop] = append(r.Data[result.Hop], MtrPEntry{
-				Address: ip,
-				RDNS:    rDNSLookup(ip),
-				Code:    result.Result.Code,
-				Latency: float64(result.Result.Latency) / float64(time.Millisecond),
-			})
+			if entry.Code != 258 && entry.Code != 256 {
+				r.Data[result.Probe] = r.Data[result.Probe][:result.Hop+1]
+			}
 		}
+
+		finishPipe <- struct{}{}
+		close(finishPipe)
 	}()
 
 	m := icmp.GetICMPManager()
@@ -115,9 +123,11 @@ func mtr(q *MtrQ) (*MtrP, error) {
 
 		countTimes++
 		go func() {
+			thisCount := countTimes - 1
 			for i := uint64(0); i < q.MaxHop; i++ {
 				result := <-m.Issue(addr, int(i), timeout)
 				resultPipe <- MTRResult{
+					Probe:  thisCount,
 					Hop:    i,
 					Result: result,
 				}
@@ -132,7 +142,9 @@ func mtr(q *MtrQ) (*MtrP, error) {
 	}
 
 	times.Wait()
-	for r.Data[len(r.Data)-1] == nil {
+	close(resultPipe)
+	<-finishPipe
+	for len(r.Data) != 0 && r.Data[len(r.Data)-1] == nil {
 		r.Data = r.Data[:len(r.Data)-1]
 	}
 	return &r, nil

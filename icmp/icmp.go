@@ -128,9 +128,11 @@ type ICMPManager struct {
 	ctx context.Context
 	// function to call to stop the manager
 	cancel context.CancelFunc
-	// icmp packet conn of related network
+	// icmp packet conn and mutex of related network
 	pConn4 *icmp.PacketConn
+	lc4    sync.Mutex
 	pConn6 *icmp.PacketConn
+	lc6    sync.Mutex
 }
 
 var manager *ICMPManager
@@ -425,15 +427,19 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 	}, timeout)
 
 	if v4 {
+		mgr.lc4.Lock()
 		if err := mgr.pConn4.IPv4PacketConn().SetTTL(ttl); err != nil {
 			return nil
 		}
 		_, _ = mgr.pConn4.WriteTo(msg, ipAddr)
+		mgr.lc4.Unlock()
 	} else {
+		mgr.lc6.Lock()
 		if err := mgr.pConn6.IPv6PacketConn().SetHopLimit(ttl); err != nil {
 			return nil
 		}
 		_, _ = mgr.pConn6.WriteTo(msg, ipAddr)
+		mgr.lc6.Unlock()
 	}
 
 	return

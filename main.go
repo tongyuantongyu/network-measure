@@ -50,13 +50,15 @@ func jsonResult(c *gin.Context, r interface{}, e error) {
 
 func verifyStamp(c *gin.Context, timeStamp, nonce uint64) bool {
 	if time.Since(time.Unix(int64(timeStamp), 0)) > 60*time.Second {
-		c.AbortWithStatus(http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Stamp timeout")
+		c.Abort()
 		return false
 	}
 
 	nonceString := strconv.FormatUint(nonce, 16)
 	if _, err := nonceMap.Get(nonceString); err != ttlcache.ErrNotFound {
-		c.AbortWithStatus(http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Nonce already used")
+		c.Abort()
 		return false
 	}
 
@@ -174,12 +176,16 @@ func verify(c *gin.Context) {
 	sign := c.GetHeader("X-Signature")
 	hexSign, err := hex.DecodeString(sign)
 	if sign == "" || err != nil {
-		c.AbortWithStatus(http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Missing signature")
+		c.Abort()
 		return
 	}
 
-	if !hmac.Equal(hexSign, h.Sum(body)) {
-		c.AbortWithStatus(http.StatusUnauthorized)
+	h.Write(body)
+
+	if !hmac.Equal(hexSign, h.Sum(nil)) {
+		c.String(http.StatusUnauthorized, "Invalid signature")
+		c.Abort()
 		return
 	}
 
@@ -191,7 +197,8 @@ func limit(enable bool) gin.HandlerFunc {
 		if enable {
 			c.Next()
 		} else {
-			c.AbortWithStatus(http.StatusForbidden)
+			c.String(http.StatusForbidden, "API not enabled")
+			c.Abort()
 			return
 		}
 	}
