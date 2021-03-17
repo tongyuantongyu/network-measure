@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"network-measure/tool"
 	"strconv"
 	"time"
 )
@@ -67,7 +68,7 @@ func verifyStamp(c *gin.Context, timeStamp, nonce uint64) bool {
 }
 
 func handleResolve(c *gin.Context) {
-	var q ResolveQ
+	var q tool.ResolveQ
 	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
 		return
@@ -77,7 +78,7 @@ func handleResolve(c *gin.Context) {
 		return
 	}
 
-	r, err := resolve(&q)
+	r, err := tool.Resolve(&q)
 	jsonResult(c, r, err)
 
 	if err == nil {
@@ -86,7 +87,7 @@ func handleResolve(c *gin.Context) {
 }
 
 func handlePing(c *gin.Context) {
-	var q PingQ
+	var q tool.PingQ
 	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
 		return
@@ -96,7 +97,7 @@ func handlePing(c *gin.Context) {
 		return
 	}
 
-	r, err := ping(&q)
+	r, err := tool.Ping(&q)
 	jsonResult(c, r, err)
 
 	if err == nil {
@@ -105,13 +106,13 @@ func handlePing(c *gin.Context) {
 }
 
 func handleTCPing(c *gin.Context) {
-	var q TCPingQ
+	var q tool.TCPingQ
 	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
 		return
 	}
 
-	r, err := tcping(&q)
+	r, err := tool.TCPing(&q)
 	jsonResult(c, r, err)
 
 	if err == nil {
@@ -120,7 +121,7 @@ func handleTCPing(c *gin.Context) {
 }
 
 func handleMTR(c *gin.Context) {
-	var q MtrQ
+	var q tool.MtrQ
 	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
 		return
@@ -130,7 +131,7 @@ func handleMTR(c *gin.Context) {
 		return
 	}
 
-	r, err := mtr(&q)
+	r, err := tool.MTR(&q)
 	jsonResult(c, r, err)
 
 	if err == nil {
@@ -139,7 +140,7 @@ func handleMTR(c *gin.Context) {
 }
 
 func handleSpeed(c *gin.Context) {
-	var q SpeedQ
+	var q tool.SpeedQ
 	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
 		return
@@ -149,7 +150,7 @@ func handleSpeed(c *gin.Context) {
 		return
 	}
 
-	r, err := speed(&q)
+	r, err := tool.Speed(&q)
 	jsonResult(c, r, err)
 
 	if err == nil {
@@ -203,6 +204,15 @@ func limit(enable bool) gin.HandlerFunc {
 		}
 	}
 }
+
+//func _(c *gin.Context) {
+//	fmt.Printf("[DBG] %v | %15s | %-7s  %#v\n",
+//		time.Now().Format("2006/01/02 - 15:04:05"),
+//		c.ClientIP(),
+//		c.Request.Method,
+//		c.Request.URL.Path,
+//	)
+//}
 
 func main() {
 	router := gin.Default()

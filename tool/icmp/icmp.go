@@ -429,6 +429,7 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 	if v4 {
 		mgr.lc4.Lock()
 		if err := mgr.pConn4.IPv4PacketConn().SetTTL(ttl); err != nil {
+			mgr.lc4.Unlock()
 			return nil
 		}
 		_, _ = mgr.pConn4.WriteTo(msg, ipAddr)
@@ -436,6 +437,7 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 	} else {
 		mgr.lc6.Lock()
 		if err := mgr.pConn6.IPv6PacketConn().SetHopLimit(ttl); err != nil {
+			mgr.lc6.Unlock()
 			return nil
 		}
 		_, _ = mgr.pConn6.WriteTo(msg, ipAddr)

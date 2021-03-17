@@ -1,4 +1,4 @@
-package main
+package tool
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func tcping(q *TCPingQ) (*TCPingP, error) {
+func TCPing(q *TCPingQ) (*TCPingP, error) {
 	if q.Times > 100 {
 		q.Times = 100
 	}

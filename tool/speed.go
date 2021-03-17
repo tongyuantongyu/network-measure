@@ -1,4 +1,4 @@
-package main
+package tool
 
 import (
 	"context"
@@ -61,7 +61,7 @@ func request(url string, ctx context.Context) (req *http.Request, err error) {
 	return
 }
 
-func speed(q *SpeedQ) (*SpeedP, error) {
+func Speed(q *SpeedQ) (*SpeedP, error) {
 	if q.Wait < 10 {
 		q.Wait = 10
 	} else if q.Wait > 30000 {

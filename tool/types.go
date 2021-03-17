@@ -1,4 +1,4 @@
-package main
+package tool
 
 type ResolveQ struct {
 	Address string `json:"address" binding:"required"`

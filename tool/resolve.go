@@ -1,10 +1,10 @@
-package main
+package tool
 
 import (
 	"net"
 )
 
-func resolve(q *ResolveQ) (*ResolveP, error) {
+func Resolve(q *ResolveQ) (*ResolveP, error) {
 	network, err := getNetwork("ip", q.Family)
 	if err != nil {
 		return nil, err

@@ -1,12 +1,12 @@
-package main
+package tool
 
 import (
 	"net"
-	"network-measure/icmp"
+	"network-measure/tool/icmp"
 	"time"
 )
 
-func ping(q *PingQ) (*PingP, error) {
+func Ping(q *PingQ) (*PingP, error) {
 	if q.Times > 100 {
 		q.Times = 100
 	}

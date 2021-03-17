@@ -1,9 +1,9 @@
-package main
+package tool
 
 import (
 	lru "github.com/hashicorp/golang-lru"
 	"net"
-	"network-measure/icmp"
+	"network-measure/tool/icmp"
 	"sync"
 	"time"
 )
@@ -46,7 +46,7 @@ type MTRResult struct {
 	Result *icmp.Result
 }
 
-func mtr(q *MtrQ) (*MtrP, error) {
+func MTR(q *MtrQ) (*MtrP, error) {
 	if q.Times > 100 {
 		q.Times = 100
 	}
@@ -89,6 +89,11 @@ func mtr(q *MtrQ) (*MtrP, error) {
 	resultPipe := make(chan MTRResult)
 	finishPipe := make(chan struct{})
 	go func() {
+		end := make([]int, q.Times)
+		for i := uint64(0); i < q.Times; i++ {
+			end[i] = int(q.MaxHop) - 1
+		}
+
 		for result := range resultPipe {
 			ip := result.Result.AddrIP.String()
 
@@ -100,9 +105,13 @@ func mtr(q *MtrQ) (*MtrP, error) {
 				entry.Latency = float64(result.Result.Latency) / float64(time.Millisecond)
 			}
 
-			if entry.Code != 258 && entry.Code != 256 {
-				r.Data[result.Probe] = r.Data[result.Probe][:result.Hop+1]
+			if entry.Code != 258 && entry.Code != 256 && int(result.Hop) < end[result.Probe] {
+				end[result.Probe] = int(result.Hop)
 			}
+		}
+
+		for i := uint64(0); i < q.Times; i++ {
+			r.Data[i] = r.Data[i][:end[i]+1]
 		}
 
 		finishPipe <- struct{}{}
@@ -124,19 +133,49 @@ func mtr(q *MtrQ) (*MtrP, error) {
 		countTimes++
 		go func() {
 			thisCount := countTimes - 1
-			for i := uint64(0); i < q.MaxHop; i++ {
-				result := <-m.Issue(addr, int(i), timeout)
-				resultPipe <- MTRResult{
-					Probe:  thisCount,
-					Hop:    i,
-					Result: result,
-				}
 
-				if result.Code != 258 && result.Code != 256 {
-					break
-				}
+			//tickerInner := time.NewTicker(time.Second)
+			//countHop := uint64(0)
+			//hops := sync.WaitGroup{}
+			//hops.Add(int(q.MaxHop))
+			//for range tickerInner.C {
+			//	if countHop == q.MaxHop {
+			//		tickerInner.Stop()
+			//		break
+			//	}
+			//
+			//	j := int(countHop)
+			//	go func() {
+			//		result := <-m.Issue(addr, j + 1, timeout)
+			//		resultPipe <- MTRResult{
+			//			Probe:  thisCount,
+			//			Hop:    uint64(j),
+			//			Result: result,
+			//		}
+			//
+			//		hops.Done()
+			//	}()
+			//
+			//	countHop++
+			//}
+
+			hops := sync.WaitGroup{}
+			hops.Add(int(q.MaxHop))
+			for i := uint64(0); i < q.MaxHop; i++ {
+				j := int(i)
+				go func() {
+					result := <-m.Issue(addr, j+1, timeout)
+					resultPipe <- MTRResult{
+						Probe:  thisCount,
+						Hop:    uint64(j),
+						Result: result,
+					}
+
+					hops.Done()
+				}()
 			}
 
+			hops.Wait()
 			times.Done()
 		}()
 	}

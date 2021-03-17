@@ -1,0 +1,19 @@
+[connection]
+# remote websocket endpoint
+remote = "ws://127.0.0.1:8081"
+# name for this instance
+name = "debug-client"
+# key used for verify this instance
+key = "keyusedforhmac"
+# retry times before give up
+retry = 10
+# the key used in SHA256-HMAC authentication
+key = "keyusedforhmac"
+
+# Set corresponding item to false if you don't want to enable some test
+[api]
+resolve = true
+ping = true
+tcping = true
+mtr = true
+speed = true
