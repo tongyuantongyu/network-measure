@@ -9,7 +9,9 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 // An ICMPRequest represents an ICMPRequest issued by ping or trace for listener
@@ -34,16 +36,20 @@ func (r *ICMPRequest) SetTimeout(duration time.Duration) {
 	r.Deadline = r.IssueTime.Add(duration)
 }
 
-func (r ICMPRequest) Passed(time time.Time) bool {
+func (r *ICMPRequest) Passed(time time.Time) bool {
 	return r.Deadline.Before(time)
 }
 
-func (r ICMPRequest) Deliver(response Response) bool {
+func (r *ICMPRequest) Deliver(response Response) bool {
+	if r.delivery == nil {
+		return false
+	}
+
 	if response == nil {
 		r.delivery <- &Result{
 			Code: 256,
 		}
-		close(r.delivery)
+		r.delivery = nil
 		return true
 	}
 	ID, TargetIP := response.GetIdentifier()
@@ -60,7 +66,7 @@ func (r ICMPRequest) Deliver(response Response) bool {
 				Code:    Code,
 			}
 		}
-		close(r.delivery)
+		r.delivery = nil
 		return true
 	}
 	return false
@@ -82,11 +88,11 @@ type ICMPResponse struct {
 	Code int
 }
 
-func (I ICMPResponse) GetIdentifier() (int, net.IP) {
+func (I *ICMPResponse) GetIdentifier() (int, net.IP) {
 	return I.ID, I.TargetIP
 }
 
-func (I ICMPResponse) GetInformation() (net.IP, time.Time, int) {
+func (I *ICMPResponse) GetInformation() (net.IP, time.Time, int) {
 	return I.AddrIP, I.Received, I.Code
 }
 
@@ -118,12 +124,10 @@ type ICMPManager struct {
 	// which send other Protocol message(e.g. TCP, UDP) but expect ICMP reply
 	// messages.
 	extListener map[int]chan *RawResponse
-	// counter will fill the sequence field of the request (precisely 16bits)
+	// counter will fill the sequence field of the request (use low 16bits)
 	// to identify packet. it will be increased for each call and can hold at
 	// most 65536 concurrent pending requests.
-	counter uint16
-	// l is the mutex to make counter increment thread safe.
-	l sync.Mutex
+	counter uint32
 	// context to send the manager stop message
 	ctx context.Context
 	// function to call to stop the manager
@@ -138,7 +142,7 @@ type ICMPManager struct {
 var manager *ICMPManager
 var once sync.Once
 
-// listen to ICMP socket to receive packet
+// ICMPv4Receiver listen to ICMP socket to receive packet
 func ICMPv4Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan *ICMPResponse,
 	rawResponse chan *RawResponse, ctx context.Context) {
 	select {
@@ -151,7 +155,11 @@ func ICMPv4Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan
 	//    return
 	//}
 	// wait `wait` to receive some body
-	if err := conn.SetDeadline(time.Now().Add(wait)); err != nil {
+	var deadline time.Time
+	if wait != 0 {
+		deadline = time.Now().Add(wait)
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
 		return
 	}
 	readBytes := make([]byte, 1500) // max MTU
@@ -238,7 +246,7 @@ func ICMPv4Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan
 	}
 }
 
-// listen to ICMPv6 socket to receive packet
+// ICMPv6Receiver listen to ICMPv6 socket to receive packet
 func ICMPv6Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan *ICMPResponse,
 	rawResponse chan *RawResponse, ctx context.Context) {
 	select {
@@ -251,7 +259,11 @@ func ICMPv6Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan
 	//    return
 	//}
 	// wait `wait` to receive some body
-	if err := conn.SetDeadline(time.Now().Add(wait)); err != nil {
+	var deadline time.Time
+	if wait != 0 {
+		deadline = time.Now().Add(wait)
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
 		return
 	}
 	readBytes := make([]byte, 1500) // max MTU
@@ -338,8 +350,9 @@ func ICMPv6Receiver(conn *icmp.PacketConn, wait time.Duration, icmpResponse chan
 	}
 }
 
-// return ICMPManager to caller. As listening to ICMP will receive all ICMP
-// packet, there will be only one manager in the whole process.
+// GetICMPManager return ICMPManager to caller.
+// As listening to ICMP will receive all ICMP packet,
+// there will be only one manager in the whole process.
 func GetICMPManager() *ICMPManager {
 	once.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -363,15 +376,15 @@ func GetICMPManager() *ICMPManager {
 			panic(fmt.Sprintf("Can't listen to ICMPv6: %s", err))
 		}
 		manager.pConn6 = conn6
-		go ICMPv4Receiver(conn4, 1000*time.Millisecond, result4, raw4, ctx)
-		go ICMPv6Receiver(conn6, 1000*time.Millisecond, result6, raw6, ctx)
+		go ICMPv4Receiver(conn4, 0, result4, raw4, ctx)
+		go ICMPv6Receiver(conn6, 0, result6, raw6, ctx)
 		go manager.icmpDispatcher(result4, result6)
 		go manager.rawDispatcher(raw4, raw6)
 		// warm-up
 		addr, _ := net.ResolveIPAddr("", "127.0.0.1")
-		manager.Issue(addr, 100, time.Second)
+		<-manager.Issue(addr, 100, time.Second)
 		addr, _ = net.ResolveIPAddr("", "::1")
-		manager.Issue(addr, 100, time.Second)
+		<-manager.Issue(addr, 100, time.Second)
 	})
 	return manager
 }
@@ -389,10 +402,7 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 	}
 	dest = ipAddr.IP.To16()
 
-	mgr.l.Lock()
-	count := mgr.counter
-	mgr.counter++
-	mgr.l.Unlock()
+	count := (atomic.AddUint32(&mgr.counter, 1) - 1) & 0xffff
 
 	id := rand.Intn(1 << 16)
 	var msg []byte
@@ -497,6 +507,14 @@ func (mgr *ICMPManager) rawDispatcher(v4, v6 chan *RawResponse) {
 		if channel, ok := mgr.extListener[response.Protocol]; ok {
 			channel <- response
 		}
+	}
+}
+
+func (mgr *ICMPManager) Flush() {
+	queue := NewCMap(32)
+	queue = (*ConMapRequest)(atomic.SwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&mgr.queue)), unsafe.Pointer(queue)))
+	for t := range mgr.queue.IterBuffered() {
+		t.Val.Deliver(nil)
 	}
 }
 

@@ -1,10 +1,8 @@
 [connection]
 # remote websocket endpoint
-remote = "ws://127.0.0.1:8081"
+remote = "ws://127.0.0.1:8080"
 # name for this instance
 name = "debug-client"
-# key used for verify this instance
-key = "keyusedforhmac"
 # retry times before give up
 retry = 10
 # the key used in SHA256-HMAC authentication

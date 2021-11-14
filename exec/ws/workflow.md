@@ -9,15 +9,15 @@ X-Signature: hex-encoded HMAC-SHA256 for X-Identifier
 
 2. Server does a series of check to the connection:
 
-    - Server should check the signature is valid, otherwise the connection should be 
+    - Server SHALL check the signature is valid, otherwise the connection SHALL be 
 closed immediately.
 
-    - Upon check pass, server should check the time span from the timestamp in
+    - Upon check pass, server SHALL check the time span from the timestamp in
 Identifier to server current time is within a specific range (say span A),
-otherwise the connection should be closed immediately.
+otherwise the connection SHALL be closed immediately.
 
-    - Then the nonce should be recorded and connection within such a span A using the
-same nonce should be closed immediately.
+    - Then the nonce SHALL be recorded and connection within such a span A using the
+same nonce SHALL be closed immediately.
 
 3. Perform connection upgrade and establish websocket connection
 

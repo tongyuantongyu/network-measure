@@ -186,19 +186,21 @@ func main() {
 		WriteBufferSize:  1048576,
 	}
 
-	h := hmac.New(sha256.New, []byte(config.Conn.Key))
-	identifier := fmt.Sprintf("%s.%x.%x", config.Conn.Name, time.Now().Unix(), rand.Uint64())
-	h.Write([]byte(identifier))
-	header := http.Header{}
-	header.Set("X-Identifier", identifier)
-	header.Set("X-Signature", hex.EncodeToString(h.Sum(nil)))
+	rand.Seed(time.Now().UnixNano())
 
 	retryCount := uint32(0)
 
 	for {
+		identifier := fmt.Sprintf("%s.%x.%x", config.Conn.Name, time.Now().Unix(), rand.Uint64())
+		header := http.Header{}
+		header.Set("X-Identifier", identifier)
+		h := hmac.New(sha256.New, []byte(config.Conn.Key))
+		h.Write([]byte(identifier))
+		header.Set("X-Signature", hex.EncodeToString(h.Sum(nil)))
+
 		conn, _, err := dialer.Dial(config.Conn.Remote, header)
-		stopper := make(chan struct{})
-		pChan := make(chan Response, 16)
+		var stopper chan struct{}
+		var pChan chan Response
 		if err != nil {
 			if retryCount < config.Conn.Retry {
 				retryCount++
@@ -208,6 +210,9 @@ func main() {
 				log.Fatalf("Can't establish connection to server %s: %s\n", config.Conn.Remote, err)
 			}
 		}
+
+		stopper = make(chan struct{})
+		pChan = make(chan Response, 16)
 
 		go func() {
 			tick := time.NewTicker(time.Second * 10)
@@ -244,6 +249,8 @@ func main() {
 			return nil
 		})
 
+		log.Printf("Connection to %s established.\n", config.Conn.Remote)
+
 	NextMsg:
 		for {
 			t, r, err := conn.NextReader()
@@ -275,7 +282,7 @@ func main() {
 				continue
 			}
 			length := binary.BigEndian.Uint32(headBuffer)
-			if length > 1048576 {
+			if length > 16*1024*1024 {
 				log.Printf("Invalid length: %d\n", length)
 				continue
 			}
@@ -309,12 +316,13 @@ func main() {
 		}
 
 	CleanUp:
-		pChan = nil
-		stopper <- struct{}{}
-		_ = conn.Close()
-		icmp.FinishICMPManager()
+		if conn != nil {
+			stopper <- struct{}{}
+			_ = conn.Close()
+		}
+		icmp.GetICMPManager().Flush()
 
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second)
 	}
 
 }
