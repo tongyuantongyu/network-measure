@@ -19,7 +19,11 @@ import (
 var config Config
 var nonceMap = ttlcache.NewCache()
 
+var version string
+var buildDate string
+
 func init() {
+	log.Printf("network-measure HTTP %s, built at %s\n", version, buildDate)
 	config.SetDefault()
 	if c, err := ioutil.ReadFile("./config.toml"); err == nil {
 		if err = toml.Unmarshal(c, &config); err != nil {
