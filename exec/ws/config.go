@@ -1,10 +1,11 @@
 package main
 
 type ConfigConn struct {
-	Remote string `toml:"remote"`
-	Name   string `toml:"name"`
-	Key    string `toml:"key"`
-	Retry  uint32 `toml:"retry"`
+	Remote   string `toml:"remote"`
+	Name     string `toml:"name"`
+	Key      string `toml:"key"`
+	Retry    uint32 `toml:"retry"`
+	Interval uint64 `toml:"retry-interval"`
 }
 
 type ConfigAPI struct {
@@ -24,6 +25,7 @@ func (r *Config) SetDefault() {
 	r.Conn.Remote = "ws://127.0.0.1:8080"
 	r.Conn.Name = "debug-client"
 	r.Conn.Retry = 10
+	r.Conn.Interval = 10
 
 	r.API.Resolve = true
 	r.API.Ping = true

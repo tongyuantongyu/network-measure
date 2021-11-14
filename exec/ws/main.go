@@ -327,7 +327,6 @@ func main() {
 		}
 		icmp.GetICMPManager().Flush()
 
-		time.Sleep(time.Second)
+		time.Sleep(time.Duration(config.Conn.Interval) * time.Second)
 	}
-
 }

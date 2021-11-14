@@ -7,6 +7,8 @@ name = "debug-client"
 retry = 10
 # the key used in SHA256-HMAC authentication
 key = "keyusedforhmac"
+# retry interval
+retry-interval = 10
 
 # Set corresponding item to false if you don't want to enable some test
 [api]
