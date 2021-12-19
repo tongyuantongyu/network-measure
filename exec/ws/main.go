@@ -22,8 +22,11 @@ import (
 
 var config Config
 
-var version string
-var buildDate string
+var (
+	version     string
+	fullVersion string
+	buildDate   string
+)
 
 const (
 	cmdResolve = iota
@@ -169,7 +172,7 @@ func handleSpeed(body []byte) (r []byte) {
 }
 
 func init() {
-	log.Printf("network-measure HTTP %s, built at %s\n", version, buildDate)
+	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
 
 	config.SetDefault()
 	if c, err := ioutil.ReadFile("./config.toml"); err == nil {
@@ -182,6 +185,14 @@ func init() {
 	} else {
 		log.Println("No config found. use default settings.")
 	}
+}
+
+func getUserAgent() string {
+	if config.Conn.UserAgent != nil {
+		return *config.Conn.UserAgent
+	}
+
+	return "network-measure " + version
 }
 
 func main() {
@@ -198,6 +209,7 @@ func main() {
 	for {
 		identifier := fmt.Sprintf("%s.%x.%x", config.Conn.Name, time.Now().Unix(), rand.Uint64())
 		header := http.Header{}
+		header.Set("User-Agent", getUserAgent())
 		header.Set("X-Identifier", identifier)
 		h := hmac.New(sha256.New, []byte(config.Conn.Key))
 		h.Write([]byte(identifier))

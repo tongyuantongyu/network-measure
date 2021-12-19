@@ -1,11 +1,12 @@
 package main
 
 type ConfigConn struct {
-	Remote   string `toml:"remote"`
-	Name     string `toml:"name"`
-	Key      string `toml:"key"`
-	Retry    uint32 `toml:"retry"`
-	Interval uint64 `toml:"retry-interval"`
+	Remote    string  `toml:"remote"`
+	Name      string  `toml:"name"`
+	Key       string  `toml:"key"`
+	Retry     uint32  `toml:"retry"`
+	Interval  uint64  `toml:"retry-interval"`
+	UserAgent *string `toml:"user-agent"`
 }
 
 type ConfigAPI struct {

@@ -9,6 +9,8 @@ retry = 10
 key = "keyusedforhmac"
 # retry interval
 retry-interval = 10
+# uncomment to use custom user agent
+# user-agent = ""
 
 # Set corresponding item to false if you don't want to enable some test
 [api]
