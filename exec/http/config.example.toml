@@ -12,6 +12,8 @@ ping = true
 tcping = true
 mtr = true
 speed = true
+# allow speedtest of non-public address (may cause confused deputy problem)
+speed-unsafe = false
 
 [site]
 # HTTPS Public key

@@ -37,6 +37,7 @@ type NetworkFixedDialer struct {
 	D              *net.Dialer
 	Network        string
 	RemoteReporter func(string)
+	safe           bool
 }
 
 func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -48,7 +49,7 @@ func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address s
 		return nil, errors.New("connection failed")
 	} else {
 		addr := conn.RemoteAddr().(*net.TCPAddr)
-		if isLocal(addr) {
+		if d.safe && isLocal(addr) {
 			_ = conn.Close()
 			return nil, errors.New("connection failed")
 		} else {
@@ -64,7 +65,7 @@ func request(url string, ctx context.Context) (req *http.Request, err error) {
 	return
 }
 
-func Speed(q *SpeedQ) (*SpeedP, error) {
+func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 	if q.Wait < 10 {
 		q.Wait = 10
 	} else if q.Wait > 30000 {
@@ -110,6 +111,7 @@ func Speed(q *SpeedQ) (*SpeedP, error) {
 				RemoteReporter: func(s string) {
 					r.Resolved = s
 				},
+				safe: safe,
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          100,

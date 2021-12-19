@@ -169,7 +169,7 @@ func handleSpeed(body []byte) (r []byte) {
 		return
 	}
 
-	rs, err := tool.Speed(&q.Q)
+	rs, err := tool.Speed(&q.Q, !config.API.SpeedUnsafe)
 	r = jsonResult(q.ID, rs, err)
 
 	if err == nil {

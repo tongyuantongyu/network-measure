@@ -6,11 +6,12 @@ type ConfigAuth struct {
 }
 
 type ConfigAPI struct {
-	Resolve bool `toml:"resolve"`
-	Ping    bool `toml:"ping"`
-	TCPing  bool `toml:"tcping"`
-	MTR     bool `toml:"mtr"`
-	Speed   bool `toml:"speed"`
+	Resolve     bool `toml:"resolve"`
+	Ping        bool `toml:"ping"`
+	TCPing      bool `toml:"tcping"`
+	MTR         bool `toml:"mtr"`
+	Speed       bool `toml:"speed"`
+	SpeedUnsafe bool `toml:"speed-unsafe"`
 }
 
 type ConfigSite struct {
@@ -33,6 +34,7 @@ func (r *Config) SetDefault() {
 	r.API.TCPing = true
 	r.API.MTR = true
 	r.API.Speed = true
+	r.API.SpeedUnsafe = false
 
 	r.Site.Listen = ":4096"
 }

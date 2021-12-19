@@ -164,7 +164,7 @@ func handleSpeed(c *gin.Context) {
 		return
 	}
 
-	r, err := tool.Speed(&q)
+	r, err := tool.Speed(&q, !config.API.SpeedUnsafe)
 	jsonResult(c, r, err)
 
 	if err == nil {
