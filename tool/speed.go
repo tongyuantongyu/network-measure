@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var speedUA = "network-measure Speedtest Client v1"
+
 func isLocal(addr *net.TCPAddr) bool {
 	if !addr.IP.IsGlobalUnicast() {
 		return true
@@ -58,6 +60,7 @@ func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address s
 
 func request(url string, ctx context.Context) (req *http.Request, err error) {
 	req, err = http.NewRequestWithContext(ctx, "GET", url, nil)
+	req.Header.Set("User-Agent", speedUA)
 	return
 }
 

@@ -19,6 +19,8 @@ t = [['linux', 'amd64'],
      ['windows', 'amd64'],
 ]
 
+# add -X 'network-measure/tool.speedUA=custom' in -ldflags to customize speed test client user-agent
+
 for o, a in t:
     subprocess.run(
         f'''SET GOOS={o}&&SET GOARCH={a}&&'''
