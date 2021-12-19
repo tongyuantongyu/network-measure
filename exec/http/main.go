@@ -89,6 +89,8 @@ func handleResolve(c *gin.Context) {
 
 	if err == nil {
 		log.Printf("Done resolving address of `%s`.\n", q.Address)
+	} else {
+		log.Printf("Failed resolving address of `%s`: %s\n", q.Address, err)
 	}
 }
 
@@ -108,6 +110,8 @@ func handlePing(c *gin.Context) {
 
 	if err == nil {
 		log.Printf("Done ping `%s` for %d times.\n", q.Address, q.Times)
+	} else {
+		log.Printf("Failed ping `%s`: %s\n", q.Address, err)
 	}
 }
 
@@ -123,6 +127,8 @@ func handleTCPing(c *gin.Context) {
 
 	if err == nil {
 		log.Printf("Done tcping `%s` for %d times.\n", q.Address, q.Times)
+	} else {
+		log.Printf("Failed tcping `%s`: %s\n", q.Address, err)
 	}
 }
 
@@ -142,6 +148,8 @@ func handleMTR(c *gin.Context) {
 
 	if err == nil {
 		log.Printf("Done mtr `%s` for %d times.\n", q.Address, q.Times)
+	} else {
+		log.Printf("Failed mtr `%s`: %s\n", q.Address, err)
 	}
 }
 
@@ -161,6 +169,8 @@ func handleSpeed(c *gin.Context) {
 
 	if err == nil {
 		log.Printf("Done speedtest `%s` for %d milliseconds.\n", q.URL, q.Span)
+	} else {
+		log.Printf("Failed speedtest `%s`: %s\n", q.URL, err)
 	}
 }
 

@@ -82,6 +82,8 @@ func handleResolve(body []byte) (r []byte) {
 
 	if err == nil {
 		log.Printf("Done resolving address of `%s`.\n", q.Q.Address)
+	} else {
+		log.Printf("Failed resolving address of `%s`: %s\n", q.Q.Address, err)
 	}
 
 	return
@@ -103,6 +105,8 @@ func handlePing(body []byte) (r []byte) {
 
 	if err == nil {
 		log.Printf("Done ping `%s` for %d times.\n", q.Q.Address, q.Q.Times)
+	} else {
+		log.Printf("Failed ping `%s`: %s\n", q.Q.Address, err)
 	}
 
 	return
@@ -124,6 +128,8 @@ func handleTCPing(body []byte) (r []byte) {
 
 	if err == nil {
 		log.Printf("Done tcping `%s` for %d times.\n", q.Q.Address, q.Q.Times)
+	} else {
+		log.Printf("Failed tcping `%s`: %s\n", q.Q.Address, err)
 	}
 
 	return
@@ -145,6 +151,8 @@ func handleMTR(body []byte) (r []byte) {
 
 	if err == nil {
 		log.Printf("Done mtr `%s` for %d times.\n", q.Q.Address, q.Q.Times)
+	} else {
+		log.Printf("Failed mtr `%s`: %s\n", q.Q.Address, err)
 	}
 
 	return
@@ -166,13 +174,15 @@ func handleSpeed(body []byte) (r []byte) {
 
 	if err == nil {
 		log.Printf("Done speedtest `%s` for %d milliseconds.\n", q.Q.URL, q.Q.Span)
+	} else {
+		log.Printf("Failed speedtest `%s`: %s\n", q.Q.URL, err)
 	}
 
 	return
 }
 
 func init() {
-	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
+	log.Printf("network-measure Websocket %s, built at %s\n", fullVersion, buildDate)
 
 	config.SetDefault()
 	if c, err := ioutil.ReadFile("./config.toml"); err == nil {
