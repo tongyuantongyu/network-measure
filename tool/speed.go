@@ -2,9 +2,11 @@ package tool
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 )
@@ -34,10 +36,9 @@ func isLocal(addr *net.TCPAddr) bool {
 }
 
 type NetworkFixedDialer struct {
-	D              *net.Dialer
-	Network        string
-	RemoteReporter func(string)
-	safe           bool
+	D       *net.Dialer
+	Network string
+	safe    bool
 }
 
 func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -47,16 +48,13 @@ func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address s
 	conn, err := d.D.DialContext(ctx, d.Network, address)
 	if err != nil {
 		return nil, errors.New("connection failed")
-	} else {
-		addr := conn.RemoteAddr().(*net.TCPAddr)
-		if d.safe && isLocal(addr) {
-			_ = conn.Close()
-			return nil, errors.New("connection failed")
-		} else {
-			d.RemoteReporter(addr.IP.String())
-			return conn, nil
-		}
 	}
+	addr := conn.RemoteAddr().(*net.TCPAddr)
+	if d.safe && isLocal(addr) {
+		_ = conn.Close()
+		return nil, errors.New("connection failed")
+	}
+	return conn, nil
 }
 
 func request(url string, ctx context.Context) (req *http.Request, err error) {
@@ -99,6 +97,8 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 		fallbackDelay = 0
 	}
 
+	var now time.Time
+
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&NetworkFixedDialer{
@@ -108,10 +108,7 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 					FallbackDelay: fallbackDelay,
 				},
 				Network: network,
-				RemoteReporter: func(s string) {
-					r.Resolved = s
-				},
-				safe: safe,
+				safe:    safe,
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          100,
@@ -124,14 +121,48 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 	buffer := make([]byte, 131072)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			switch addr := info.Conn.RemoteAddr().(type) {
+			case *net.TCPAddr:
+				r.Resolved = addr.IP.String()
+			case *net.UDPAddr:
+				r.Resolved = addr.IP.String()
+			}
+		},
+		GotFirstResponseByte: func() {
+			if r.Trace.FirstByte == 0 {
+				r.Trace.FirstByte = float64(time.Since(now)) / float64(time.Millisecond)
+			}
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if err == nil && r.Trace.Conn == 0 {
+				r.Trace.Conn = float64(time.Since(now)) / float64(time.Millisecond)
+			}
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			if err == nil && r.Trace.TLS == 0 {
+				r.Trace.TLS = float64(time.Since(now)) / float64(time.Millisecond)
+			}
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			if info.Err == nil && r.Trace.Sent == 0 {
+				r.Trace.Sent = float64(time.Since(now)) / float64(time.Millisecond)
+			}
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			if info.Err == nil && r.Trace.Sent == 0 {
+				r.Trace.DNS = float64(time.Since(now)) / float64(time.Millisecond)
+			}
+		},
+	})
 	req, err := request(q.URL, ctx)
 	if err != nil {
 		cancel()
 		return nil, errors.New("bad url")
 	}
 
-	now := time.Now()
-
+	now = time.Now()
 	canceller := make(chan struct{})
 
 	go func() {
@@ -177,10 +208,10 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 		}
 	}
 
-	now = time.Now()
+	rcvStart := time.Now()
 	for {
 		n, err := resp.Body.Read(buffer)
-		elapsed := time.Since(now)
+		elapsed := time.Since(rcvStart)
 		if err != nil {
 			r.Elapsed = float64(elapsed) / float64(time.Millisecond)
 			if !strings.Contains(err.Error(), "context canceled") {

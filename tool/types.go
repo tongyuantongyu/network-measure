@@ -118,4 +118,12 @@ type SpeedP struct {
 	Elapsed  float64       `json:"elapsed"`
 	Received uint64        `json:"received"`
 	Data     []SpeedPEntry `json:"data"`
+
+	Trace struct {
+		DNS       float64 `json:"dns"`
+		Conn      float64 `json:"conn"`
+		TLS       float64 `json:"tls,omitempty"`
+		Sent      float64 `json:"request_sent"`
+		FirstByte float64 `json:"first_byte"`
+	} `json:"trace"`
 }
