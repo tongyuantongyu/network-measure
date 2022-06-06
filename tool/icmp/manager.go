@@ -50,17 +50,14 @@ type ConMapRequest struct {
 	HashMap ConcurrentMapRequest
 }
 
-// A "thread" safe map of type int:Anything.
-// To avoid lock bottlenecks this map is dived to several (Shards) map shards.
 type ConcurrentMapRequest []*ConcurrentMapSharedRequest
 
-// A "thread" safe int to anything map.
 type ConcurrentMapSharedRequest struct {
 	items        map[int]Request
 	sync.RWMutex // Read Write mutex, guards access to internal map.
 }
 
-// Creates a new concurrent map.
+// NewCMap creates a new concurrent map.
 func NewCMap(shards int) *ConMapRequest {
 	m := &ConMapRequest{Shards: shards, HashMap: make(ConcurrentMapRequest, shards)}
 	for i := 0; i < shards; i++ {
@@ -69,14 +66,14 @@ func NewCMap(shards int) *ConMapRequest {
 	return m
 }
 
-// Returns shard under given key
+// GetShard returns shard under given key
 func (m *ConMapRequest) GetShard(key int) *ConcurrentMapSharedRequest {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(key))
+	var b [4]byte
+	binary.LittleEndian.PutUint32(b[:], uint32(key))
 	return m.HashMap[fnv32(b)%uint32(m.Shards)]
 }
 
-// Retrieves an element from map under given key.
+// Get an element from map under given key.
 func (m *ConMapRequest) Get(key int) (Request, bool) {
 	// Get shard
 	shard := m.GetShard(key)
@@ -87,7 +84,7 @@ func (m *ConMapRequest) Get(key int) (Request, bool) {
 	return val, ok
 }
 
-// Sets the given value under the specified key.
+// Set the given value under the specified key.
 func (m *ConMapRequest) Set(key int, value Request, timeout time.Duration) {
 	// Get map shard.
 	shard := m.GetShard(key)
@@ -98,7 +95,7 @@ func (m *ConMapRequest) Set(key int, value Request, timeout time.Duration) {
 	shard.Unlock()
 }
 
-// Returns the number of elements within the map.
+// Count the number of elements within the map.
 func (m *ConMapRequest) Count() int {
 	count := 0
 	for i := 0; i < m.Shards; i++ {
@@ -110,13 +107,12 @@ func (m *ConMapRequest) Count() int {
 	return count
 }
 
-// Used by the Iter & IterBuffered functions to wrap two variables together over a channel,
 type Tuple struct {
 	Key int
 	Val Request
 }
 
-// Returns a buffered iterator which could be used in a for range loop.
+// IterBuffered returns a buffered iterator which could be used in a for range loop.
 func (m *ConMapRequest) IterBuffered() <-chan Tuple {
 	chans := snapshot(m)
 	total := 0
@@ -170,7 +166,7 @@ func fanIn(chans []chan Tuple, out chan Tuple) {
 	close(out)
 }
 
-// Removes an element from the map.
+// Remove an element from the map.
 func (m *ConMapRequest) Remove(key int) {
 	// Try to get shard.
 	shard := m.GetShard(key)
@@ -179,7 +175,7 @@ func (m *ConMapRequest) Remove(key int) {
 	shard.Unlock()
 }
 
-// Removes an element from the map and returns it
+// Pop an element from the map and returns it
 func (m *ConMapRequest) Pop(key int) (v Request, exists bool) {
 	// Try to get shard.
 	shard := m.GetShard(key)
@@ -190,7 +186,7 @@ func (m *ConMapRequest) Pop(key int) (v Request, exists bool) {
 	return v, exists
 }
 
-func fnv32(key []byte) uint32 {
+func fnv32(key [4]byte) uint32 {
 	hash := uint32(2166136261)
 	const prime32 = uint32(16777619)
 	for i := 0; i < len(key); i++ {

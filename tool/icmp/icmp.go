@@ -382,15 +382,15 @@ func GetICMPManager() *ICMPManager {
 		go manager.rawDispatcher(raw4, raw6)
 		// warm-up
 		addr, _ := net.ResolveIPAddr("", "127.0.0.1")
-		<-manager.Issue(addr, 100, time.Second)
+		<-manager.Issue(addr, 100, time.Second, 0)
 		addr, _ = net.ResolveIPAddr("", "::1")
-		<-manager.Issue(addr, 100, time.Second)
+		<-manager.Issue(addr, 100, time.Second, 0)
 	})
 	return manager
 }
 
 // Issue an ICMP echo request. return a channel to send result back
-func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (delivery chan *Result) {
+func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration, length int) (delivery chan *Result) {
 	ipAddr, ok := ip.(*net.IPAddr)
 	if !ok {
 		return nil
@@ -403,8 +403,13 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 	dest = ipAddr.IP.To16()
 
 	count := (atomic.AddUint32(&mgr.counter, 1) - 1) & 0xffff
-
 	id := rand.Intn(1 << 16)
+	var data []byte
+	if length > 0 {
+		data = make([]byte, length)
+		rand.Read(data)
+	}
+
 	var msg []byte
 	if v4 {
 		echo := icmp.Message{
@@ -413,7 +418,7 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 			Body: &icmp.Echo{
 				ID:   id,
 				Seq:  int(count),
-				Data: nil,
+				Data: data,
 			}}
 		msg, _ = echo.Marshal(nil)
 	} else {
@@ -423,7 +428,7 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration) (deli
 			Body: &icmp.Echo{
 				ID:   id,
 				Seq:  int(count),
-				Data: nil,
+				Data: data,
 			}}
 		msg, _ = echo.Marshal(nil)
 	}

@@ -164,7 +164,7 @@ func MTR(q *MtrQ) (*MtrP, error) {
 			for i := uint64(0); i < q.MaxHop; i++ {
 				j := int(i)
 				go func() {
-					result := <-m.Issue(addr, j+1, timeout)
+					result := <-m.Issue(addr, j+1, timeout, 0)
 					resultPipe <- MTRResult{
 						Probe:  thisCount,
 						Hop:    uint64(j),
