@@ -34,6 +34,7 @@ const (
 	cmdTCPing
 	cmdMTR
 	cmdSpeed
+	cmdTLS
 )
 
 var cmdMap = map[uint32]func([]byte) []byte{
@@ -42,6 +43,7 @@ var cmdMap = map[uint32]func([]byte) []byte{
 	cmdTCPing:  handleTCPing,
 	cmdMTR:     handleMTR,
 	cmdSpeed:   handleSpeed,
+	cmdTLS:     handleTLS,
 }
 
 type Response struct {
@@ -176,6 +178,29 @@ func handleSpeed(body []byte) (r []byte) {
 		log.Printf("Done speedtest `%s` for %d milliseconds.\n", q.Q.URL, q.Q.Span)
 	} else {
 		log.Printf("Failed speedtest `%s`: %s\n", q.Q.URL, err)
+	}
+
+	return
+}
+
+func handleTLS(body []byte) (r []byte) {
+	var q struct {
+		ID uint64    `json:"id"`
+		Q  tool.TlsQ `json:"request"`
+	}
+
+	if err := binding.JSON.BindBody(body, &q); err != nil {
+		r = jsonResult(q.ID, nil, err)
+		return
+	}
+
+	rs, err := tool.TLS(&q.Q)
+	r = jsonResult(q.ID, rs, err)
+
+	if err == nil {
+		log.Printf("Done tls handshake to `%s`.\n", q.Q.Address)
+	} else {
+		log.Printf("Failed tls handshake to `%s`: %s\n", q.Q.Address, err)
 	}
 
 	return

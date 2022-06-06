@@ -174,6 +174,27 @@ func handleSpeed(c *gin.Context) {
 	}
 }
 
+func handleTLS(c *gin.Context) {
+	var q tool.TlsQ
+	if err := binding.JSON.BindBody(c.Keys["body"].([]byte), &q); err != nil {
+		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
+		return
+	}
+
+	if config.Auth.UseAuth && !verifyStamp(c, q.TimeStamp, q.Nonce) {
+		return
+	}
+
+	r, err := tool.TLS(&q)
+	jsonResult(c, r, err)
+
+	if err == nil {
+		log.Printf("Done tls handshake to `%s`.\n", q.Address)
+	} else {
+		log.Printf("Failed tls handshake to `%s`: %s\n", q.Address, err)
+	}
+}
+
 func verify(c *gin.Context) {
 	body, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
@@ -239,6 +260,7 @@ func main() {
 		a.POST("/tcping", limit(config.API.TCPing), handleTCPing)
 		a.POST("/mtr", limit(config.API.MTR), handleMTR)
 		a.POST("/speed", limit(config.API.Speed), handleSpeed)
+		a.POST("/tls", limit(config.API.TLS), handleTLS)
 	}
 	router.HandleMethodNotAllowed = true
 
