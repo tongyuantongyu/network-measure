@@ -3,6 +3,7 @@ package icmp
 import (
 	"encoding/binary"
 	"net"
+	"network-measure/tool/fasttime"
 	"sync"
 	"time"
 )
@@ -29,13 +30,14 @@ type Manager interface {
 
 type Request interface {
 	SetTimeout(time.Duration)
-	Passed(time.Time) bool
+	Passed(fasttime.Time) bool
 	Deliver(Response) bool
 }
 
 type Response interface {
 	GetIdentifier() (int, net.IP)
-	GetInformation() (net.IP, time.Time, int)
+	GetInformation() (net.IP, fasttime.Time, int)
+	GetVerifier() any
 }
 
 // Concurrent map implementation by orcaman(https://github.com/orcaman)

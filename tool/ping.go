@@ -38,7 +38,7 @@ func Ping(q *PingQ) (*PingP, error) {
 
 	m := icmp.GetICMPManager()
 	for i := uint64(0); i < q.Times; i++ {
-		result := <-m.Issue(addr, 100, time.Duration(q.Wait)*time.Millisecond, 0)
+		result := <-m.Issue(addr, 100, time.Duration(q.Wait)*time.Millisecond, 56)
 		r.Data = append(r.Data, PingPEntry{
 			IP:      result.AddrIP.String(),
 			Code:    result.Code,

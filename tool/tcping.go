@@ -67,7 +67,7 @@ func TCPing(q *TCPingQ) (*TCPingP, error) {
 
 	for i := uint64(0); i < q.Times; i++ {
 		ctx, cancel = context.WithCancel(context.Background())
-		conn, err := d.DialContext(ctx, network, host)
+		conn, err := d.DialContext(ctx, network, addr.String())
 		if err != nil {
 			r.Data = append(r.Data, TCPingPEntry{
 				Success: false,
