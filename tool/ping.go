@@ -21,7 +21,7 @@ func Ping(q *PingQ) (*PingP, error) {
 		q.Interval = 10000
 	}
 
-	network, err := getNetwork("ip", q.Family)
+	network, err := getNetwork("ip", q.Family, "")
 	if err != nil {
 		return nil, err
 	}

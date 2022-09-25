@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"time"
 )
 
@@ -16,14 +17,30 @@ func getContext(span uint64) (context.Context, context.CancelFunc) {
 	}
 }
 
-func getNetwork(network string, family int32) (string, error) {
+func getNetwork(network string, family int32, host string) (string, error) {
+	if family == 0 && host != "" {
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
+			ipp, err := netip.ParseAddrPort(host)
+			if err == nil {
+				ip = ipp.Addr()
+			}
+		}
+		if ip.IsValid() {
+			switch {
+			case ip.Is4():
+				family = 4
+			case ip.Is6():
+				family = 6
+			}
+		}
+	}
 	switch family {
 	case 4:
 		network += "4"
 	case 6:
 		network += "6"
 	case 0:
-		break
 	default:
 		return "", errors.New("bad family number")
 	}

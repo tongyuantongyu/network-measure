@@ -21,10 +21,15 @@ type ConfigSite struct {
 	Listen string `toml:"listen"`
 }
 
+type ConfigNetwork struct {
+	Bind []string `toml:"bind"`
+}
+
 type Config struct {
-	Auth ConfigAuth `toml:"auth"`
-	API  ConfigAPI  `toml:"api"`
-	Site ConfigSite `toml:"site"`
+	Auth    ConfigAuth    `toml:"auth"`
+	API     ConfigAPI     `toml:"api"`
+	Site    ConfigSite    `toml:"site"`
+	Network ConfigNetwork `toml:"network"`
 }
 
 func (r *Config) SetDefault() {

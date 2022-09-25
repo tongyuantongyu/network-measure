@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"network-measure/bind"
 	"strings"
 	"syscall"
 	"time"
@@ -24,7 +25,7 @@ func TCPing(q *TCPingQ) (*TCPingP, error) {
 		q.Interval = 10000
 	}
 
-	network, err := getNetwork("tcp", q.Family)
+	network, err := getNetwork("tcp", q.Family, "")
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +60,17 @@ func TCPing(q *TCPingQ) (*TCPingP, error) {
 			})
 			return nil
 		},
+		FallbackDelay: -1,
 	}
 
-	if q.Family != 0 {
-		d.FallbackDelay = -time.Millisecond
+	if addr.IP.To4() != nil {
+		if bind.LAddr4() != nil {
+			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr4().IP}
+		}
+	} else {
+		if bind.LAddr6() != nil {
+			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
+		}
 	}
 
 	for i := uint64(0); i < q.Times; i++ {

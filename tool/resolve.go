@@ -5,7 +5,7 @@ import (
 )
 
 func Resolve(q *ResolveQ) (*ResolveP, error) {
-	network, err := getNetwork("ip", q.Family)
+	network, err := getNetwork("ip", q.Family, "")
 	if err != nil {
 		return nil, err
 	}

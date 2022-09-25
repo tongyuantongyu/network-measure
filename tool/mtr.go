@@ -67,7 +67,7 @@ func MTR(q *MtrQ) (*MtrP, error) {
 		q.MaxHop = 100
 	}
 
-	network, err := getNetwork("ip", q.Family)
+	network, err := getNetwork("ip", q.Family, "")
 	if err != nil {
 		return nil, err
 	}

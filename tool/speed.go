@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"network-measure/bind"
 	"strings"
 	"time"
 )
@@ -35,14 +36,14 @@ func isLocal(addr *net.TCPAddr) bool {
 	}
 }
 
-type NetworkFixedDialer struct {
+type PatchedDialer struct {
 	D       *net.Dialer
 	Network string
 	safe    bool
 }
 
-func (d *NetworkFixedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if len(d.Network) == 0 {
+func (d *PatchedDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if d.Network == "" {
 		return d.D.DialContext(ctx, network, address)
 	}
 	conn, err := d.D.DialContext(ctx, d.Network, address)
@@ -83,44 +84,13 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 		q.URL = "http://" + q.URL
 	}
 
-	network, err := getNetwork("tcp", q.Family)
-	if err != nil {
-		return nil, err
-	}
-
 	r := SpeedP{}
-
-	var fallbackDelay time.Duration
-	if q.Family != 0 {
-		fallbackDelay = -time.Millisecond
-	} else {
-		fallbackDelay = 0
-	}
-
 	var now time.Time
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&NetworkFixedDialer{
-				D: &net.Dialer{
-					Timeout:       30 * time.Second,
-					KeepAlive:     30 * time.Second,
-					FallbackDelay: fallbackDelay,
-				},
-				Network: network,
-				safe:    safe,
-			}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-	}
 
 	buffer := make([]byte, 131072)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GotConn: func(info httptrace.GotConnInfo) {
 			switch addr := info.Conn.RemoteAddr().(type) {
@@ -158,8 +128,47 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 	})
 	req, err := request(q.URL, ctx)
 	if err != nil {
-		cancel()
 		return nil, errors.New("bad url")
+	}
+
+	network, err := getNetwork("tcp", q.Family, req.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	var fallbackDelay time.Duration
+	var laddr net.Addr
+	if network != "tcp" {
+		fallbackDelay = -time.Millisecond
+	} else {
+		if bind.Set() {
+			return nil, errors.New("this instance explicitly binds to specific ip, but is unable to determine socket family to use")
+		}
+		if network == "tcp4" {
+			laddr = &net.TCPAddr{IP: bind.LAddr4().IP}
+		} else if network == "tcp6" {
+			laddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
+		}
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&PatchedDialer{
+				D: &net.Dialer{
+					Timeout:       30 * time.Second,
+					KeepAlive:     30 * time.Second,
+					FallbackDelay: fallbackDelay,
+					LocalAddr:     laddr,
+				},
+				Network: network,
+				safe:    safe,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
 	}
 
 	now = time.Now()

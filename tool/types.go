@@ -136,7 +136,7 @@ type TlsQ struct {
 	Port    uint16 `json:"port" binding:"required"`
 
 	Suites []uint16 `json:"suites"`
-	SNI    string   `json:"sni"`
+	SNI    *string  `json:"sni"`
 	ALPN   []string `json:"alpn"`
 	Wait   uint64   `json:"wait"`
 
@@ -163,6 +163,8 @@ type Certificate struct {
 
 	SignatureAlgorithm string `json:"signature_algorithm"`
 	PublicKeyAlgorithm string `json:"public_key_algorithm"`
+
+	Hash string `json:"hash"`
 }
 
 type TlsP struct {

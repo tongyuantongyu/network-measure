@@ -2,11 +2,14 @@ package tool
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"golang.org/x/crypto/ocsp"
 	"net"
+	"network-measure/bind"
 	"strings"
 	"time"
 )
@@ -125,7 +128,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 
 	p := &TlsP{}
 
-	network, err := getNetwork("tcp", q.Family)
+	network, err := getNetwork("tcp", q.Family, "")
 	if err != nil {
 		return nil, err
 	}
@@ -151,6 +154,16 @@ func TLS(q *TlsQ) (*TlsP, error) {
 		KeepAlive:     -1,
 	}
 
+	if addr.IP.To4() != nil {
+		if bind.LAddr4() != nil {
+			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr4().IP}
+		}
+	} else {
+		if bind.LAddr6() != nil {
+			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(q.Wait)*time.Millisecond)
 	defer cancel()
 	conn, err := d.DialContext(ctx, network, addr.String())
@@ -166,8 +179,8 @@ func TLS(q *TlsQ) (*TlsP, error) {
 	}
 
 	sni := q.Address
-	if q.SNI != "" {
-		sni = q.SNI
+	if q.SNI != nil {
+		sni = *q.SNI
 	}
 
 	cli := tls.Client(conn, &tls.Config{
@@ -214,6 +227,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 	p.Certificates.Provided = make([]Certificate, 0, len(state.PeerCertificates))
 	for i := len(state.PeerCertificates); i > 0; i-- {
 		cert := state.PeerCertificates[i-1]
+		hash := sha256.Sum256(cert.Raw)
 		data := Certificate{
 			Subject:            cert.Subject.String(),
 			Issuer:             cert.Issuer.String(),
@@ -221,6 +235,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 			NotAfter:           cert.NotAfter,
 			SignatureAlgorithm: cert.SignatureAlgorithm.String(),
 			PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+			Hash:               hex.EncodeToString(hash[:]),
 		}
 
 		_, err = cert.Verify(opts)
@@ -244,6 +259,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 	p.Certificates.Chain = make([]Certificate, 0, len(chain))
 	for i := len(chain); i > 0; i-- {
 		cert := chain[i-1]
+		hash := sha256.Sum256(cert.Raw)
 		p.Certificates.Chain = append(p.Certificates.Chain, Certificate{
 			Subject:            cert.Subject.String(),
 			NotBefore:          cert.NotBefore,
@@ -251,6 +267,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 			SignatureAlgorithm: cert.SignatureAlgorithm.String(),
 			PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
 			Valid:              true,
+			Hash:               hex.EncodeToString(hash[:]),
 		})
 	}
 

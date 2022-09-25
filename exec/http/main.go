@@ -11,7 +11,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"network-measure/bind"
 	"network-measure/tool"
+	"os"
 	"strconv"
 	"time"
 )
@@ -27,7 +29,7 @@ var (
 func init() {
 	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
 	config.SetDefault()
-	if c, err := ioutil.ReadFile("./config.toml"); err == nil {
+	if c, err := os.ReadFile("./config.toml"); err == nil {
 		if err = toml.Unmarshal(c, &config); err != nil {
 			log.Printf("Failed loading config: %s, use default settings.\n", err)
 			config.SetDefault()
@@ -36,6 +38,10 @@ func init() {
 		}
 	} else {
 		log.Println("No config found. use default settings.")
+	}
+
+	if err := bind.Parse(config.Network.Bind); err != nil {
+		log.Fatalf("Failed parse binding: %s\n", err)
 	}
 
 	_ = nonceMap.SetTTL(60 * time.Second)

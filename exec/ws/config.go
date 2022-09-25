@@ -16,11 +16,17 @@ type ConfigAPI struct {
 	MTR         bool `toml:"mtr"`
 	Speed       bool `toml:"speed"`
 	SpeedUnsafe bool `toml:"speed-unsafe"`
+	TLS         bool `toml:"tls"`
+}
+
+type ConfigNetwork struct {
+	Bind []string `toml:"bind"`
 }
 
 type Config struct {
-	Conn ConfigConn `toml:"connection"`
-	API  ConfigAPI  `toml:"api"`
+	Conn    ConfigConn    `toml:"connection"`
+	API     ConfigAPI     `toml:"api"`
+	Network ConfigNetwork `toml:"network"`
 }
 
 func (r *Config) SetDefault() {
@@ -35,4 +41,5 @@ func (r *Config) SetDefault() {
 	r.API.MTR = true
 	r.API.Speed = true
 	r.API.SpeedUnsafe = false
+	r.API.TLS = true
 }

@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"network-measure/bind"
 	"network-measure/tool/fasttime"
 	"sync"
 	"sync/atomic"
@@ -73,6 +74,16 @@ func (r *ICMPRequest) Deliver(response Response) bool {
 		}
 
 		AddrIP, Received, Code := response.GetInformation()
+		if Debug {
+			if Code == 257 {
+				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, 257<-@%d\n", float64(Received.Since(r.IssueTime))/float64(time.Millisecond),
+					r.TargetIP, r.IssueTime, Received)
+			} else {
+				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, %3d<-%s@%d\n", float64(Received.Since(r.IssueTime))/float64(time.Millisecond),
+					r.TargetIP, r.IssueTime, Code, AddrIP, Received)
+			}
+
+		}
 		if r.Passed(Received) {
 			r.delivery <- &Result{
 				Code: 256,
@@ -273,7 +284,7 @@ func v4dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 					return
 				}
 				// Recover identification from response body which contains request header.
-				// ICMP type 11 Data Structure, NotBefore IANA:
+				// ICMP type 11 Data Structure, From IANA:
 				// Data contains Source IP Header and First 8 bytes of payload
 				// 20 bytes (In our case) IP Header of source message
 				// 8 bytes  Head of Payload msg (full Echo msg in our case)
@@ -366,7 +377,7 @@ func v6dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 					return
 				}
 				// Recover identification from response body which contains request header.
-				// ICMPv6 type 3 Data Part Structure, NotBefore IANA:
+				// ICMPv6 type 3 Data Part Structure, From IANA:
 				// Data contains Source IP Header and First 8 bytes of payload
 				// 40 bytes (In our case) IPv6 Header of source message
 				// 8 bytes  Head of Payload msg (full Echo msg in our case)
@@ -424,12 +435,20 @@ func GetICMPManager() *ICMPManager {
 		result6 := make(chan *ICMPResponse, 1024)
 		raw4 := make(chan *RawResponse, 1024)
 		raw6 := make(chan *RawResponse, 1024)
-		conn4, err := icmp.ListenPacket("ip4:icmp", "")
+		laddr := ""
+		if bind.LAddr4() != nil {
+			laddr = bind.LAddr4().String()
+		}
+		conn4, err := icmp.ListenPacket("ip4:icmp", laddr)
 		if err != nil {
 			log.Fatalf("Can't listen to ICMP: %s\n", err)
 		}
 		manager.pConn4 = conn4
-		conn6, err := icmp.ListenPacket("ip6:ipv6-icmp", "")
+		laddr = ""
+		if bind.LAddr6() != nil {
+			laddr = bind.LAddr6().String()
+		}
+		conn6, err := icmp.ListenPacket("ip6:ipv6-icmp", laddr)
 		if err != nil {
 			log.Fatalf("Can't listen to ICMPv6: %s\n", err)
 		}
@@ -451,7 +470,7 @@ func GetICMPManager() *ICMPManager {
 				for range time.Tick(time.Minute) {
 					sent := atomic.SwapUint32(&manager.sent, 0)
 					recv := atomic.SwapUint32(&manager.received, 0)
-					log.Printf("Sent %d ICMP packets, received %d ICMP packets for last minute.\n", sent, recv)
+					log.Printf("[DEBUG] Sent %d ICMP packets, received %d ICMP packets for last minute.\n", sent, recv)
 				}
 			}()
 		}
