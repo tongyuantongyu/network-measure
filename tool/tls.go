@@ -155,13 +155,9 @@ func TLS(q *TlsQ) (*TlsP, error) {
 	}
 
 	if addr.IP.To4() != nil {
-		if bind.LAddr4() != nil {
-			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr4().IP}
-		}
+		d.LocalAddr = bind.LAddr4().AsTCP()
 	} else {
-		if bind.LAddr6() != nil {
-			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
-		}
+		d.LocalAddr = bind.LAddr6().AsTCP()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(q.Wait)*time.Millisecond)

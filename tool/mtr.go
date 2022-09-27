@@ -2,6 +2,7 @@ package tool
 
 import (
 	lru "github.com/hashicorp/golang-lru"
+	"math/rand"
 	"net"
 	"network-measure/tool/icmp"
 	"sync"
@@ -130,10 +131,7 @@ func MTR(q *MtrQ) (*MtrP, error) {
 			break
 		}
 
-		countTimes++
-		go func() {
-			thisCount := countTimes - 1
-
+		go func(thisCount uint64) {
 			//tickerInner := time.NewTicker(time.Second)
 			//countHop := uint64(0)
 			//hops := sync.WaitGroup{}
@@ -159,12 +157,15 @@ func MTR(q *MtrQ) (*MtrP, error) {
 			//	countHop++
 			//}
 
+			id := getICMPID()
 			hops := sync.WaitGroup{}
 			hops.Add(int(q.MaxHop))
 			for i := uint64(0); i < q.MaxHop; i++ {
 				j := int(i)
 				go func() {
-					result := <-m.Issue(addr, j+1, timeout, 56)
+					payload := icmp.ICMPPayload{ID: id, Seq: j, Data: make([]byte, 56)}
+					rand.Read(payload.Data)
+					result := <-m.Issue(addr, j+1, timeout, payload)
 					resultPipe <- MTRResult{
 						Probe:  thisCount,
 						Hop:    uint64(j),
@@ -177,7 +178,8 @@ func MTR(q *MtrQ) (*MtrP, error) {
 
 			hops.Wait()
 			times.Done()
-		}()
+		}(countTimes)
+		countTimes++
 	}
 
 	times.Wait()

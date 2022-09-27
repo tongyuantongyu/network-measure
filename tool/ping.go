@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"math/rand"
 	"net"
 	"network-measure/tool/icmp"
 	"time"
@@ -37,8 +38,11 @@ func Ping(q *PingQ) (*PingP, error) {
 	}
 
 	m := icmp.GetICMPManager()
+	id := getICMPID()
 	for i := uint64(0); i < q.Times; i++ {
-		result := <-m.Issue(addr, 100, time.Duration(q.Wait)*time.Millisecond, 56)
+		payload := icmp.ICMPPayload{ID: id, Seq: int(i), Data: make([]byte, 56)}
+		rand.Read(payload.Data)
+		result := <-m.Issue(addr, 100, time.Duration(q.Wait)*time.Millisecond, payload)
 		r.Data = append(r.Data, PingPEntry{
 			IP:      result.AddrIP.String(),
 			Code:    result.Code,

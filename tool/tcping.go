@@ -63,14 +63,10 @@ func TCPing(q *TCPingQ) (*TCPingP, error) {
 		FallbackDelay: -1,
 	}
 
-	if addr.IP.To4() != nil {
-		if bind.LAddr4() != nil {
-			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr4().IP}
-		}
-	} else {
-		if bind.LAddr6() != nil {
-			d.LocalAddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
-		}
+	if network == "tcp4" {
+		d.LocalAddr = bind.LAddr4().AsTCP()
+	} else if network == "tcp6" {
+		d.LocalAddr = bind.LAddr6().AsTCP()
 	}
 
 	for i := uint64(0); i < q.Times; i++ {

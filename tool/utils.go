@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"sync/atomic"
 	"time"
 )
 
@@ -46,4 +47,10 @@ func getNetwork(network string, family int32, host string) (string, error) {
 	}
 
 	return network, nil
+}
+
+var id uint32
+
+func getICMPID() int {
+	return int(atomic.AddUint32(&id, 1) & 0xffff)
 }

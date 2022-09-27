@@ -21,19 +21,21 @@ var Debug bool
 
 // An ICMPRequest represents an ICMPRequest issued by ping or trace for listener
 // to get corresponding Result
+
+type ICMPPayload struct {
+	ID   int
+	Seq  int
+	Data []byte
+}
+
 type ICMPRequest struct {
-	// Seq used to identify request, and will be returned in Result to mark
-	Seq int
-	// extend identify field
-	ID int
+	ICMPPayload
 	// target ip of the request, extend identify field
 	TargetIP net.IP
 	// return timeout Result if Deadline passed.
 	Deadline fasttime.Time
 	// request issue time
 	IssueTime fasttime.Time
-	// message body sent
-	Data []byte
 	// channel to return result
 	delivery chan *Result
 }
@@ -59,8 +61,8 @@ func (r *ICMPRequest) Deliver(response Response) bool {
 		r.delivery = nil
 		return true
 	}
-	ID, TargetIP := response.GetIdentifier()
-	if ID == r.ID && TargetIP.Equal(r.TargetIP) {
+	id, targetIP := response.GetIdentifier()
+	if r.ID == id && targetIP.Equal(r.TargetIP) {
 		if data, ok := response.GetVerifier().([]byte); ok {
 			l := len(data)
 			if l > len(r.Data) {
@@ -68,32 +70,35 @@ func (r *ICMPRequest) Deliver(response Response) bool {
 			}
 			if !bytes.Equal(r.Data[:l], data[:l]) {
 				log.Printf("Message body mismatch from %s, id %d, seq %d. Collision or message tampered?\n",
-					TargetIP.String(), ID, r.Seq)
+					targetIP.String(), id, r.Seq)
 				return false
 			}
+			if Debug && len(data) != len(r.Data) {
+				log.Printf("[DEBUG] Data payload length mismatch: sent %d bytes, got %d bytes.\n", len(r.Data), len(data))
+			}
 		}
 
-		AddrIP, Received, Code := response.GetInformation()
+		addrIP, received, code := response.GetInformation()
 		if Debug {
-			if Code == 257 {
-				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, 257<-@%d\n", float64(Received.Since(r.IssueTime))/float64(time.Millisecond),
-					r.TargetIP, r.IssueTime, Received)
+			if code == 257 {
+				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, 257<-@%d\n", float64(received.Since(r.IssueTime))/float64(time.Millisecond),
+					r.TargetIP, r.IssueTime, received)
 			} else {
-				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, %3d<-%s@%d\n", float64(Received.Since(r.IssueTime))/float64(time.Millisecond),
-					r.TargetIP, r.IssueTime, Code, AddrIP, Received)
+				log.Printf("[DEBUG] In %9.4fms, Echo->%39s@%d, %3d<-%s@%d\n", float64(received.Since(r.IssueTime))/float64(time.Millisecond),
+					r.TargetIP, r.IssueTime, code, addrIP, received)
 			}
 
 		}
-		if r.Passed(Received) {
+		if r.Passed(received) {
 			r.delivery <- &Result{
 				Code: 256,
 			}
-			log.Printf("Late arrived response from %s: overdue %s.\n", AddrIP, Received.Sub(r.Deadline))
+			log.Printf("Late arrived response from %s: overdue %s.\n", addrIP, received.Sub(r.Deadline))
 		} else {
 			r.delivery <- &Result{
-				AddrIP:  AddrIP,
-				Latency: Received.Sub(r.IssueTime),
-				Code:    Code,
+				AddrIP:  addrIP,
+				Latency: received.Sub(r.IssueTime),
+				Code:    code,
 			}
 		}
 		r.delivery = nil
@@ -108,28 +113,24 @@ type ICMPResponse struct {
 	AddrIP net.IP
 	// target ip of the request
 	TargetIP net.IP
-	// received data
-	Data []byte
-	// Seq used to identify request
-	Seq int
-	// extend identify field
-	ID int
+	// payload
+	ICMPPayload
 	// time passed from request time
 	Received fasttime.Time
 	// Code of ICMP destination unreachable message response
 	Code int
 }
 
-func (I *ICMPResponse) GetIdentifier() (int, net.IP) {
-	return I.ID, I.TargetIP
+func (i *ICMPResponse) GetIdentifier() (int, net.IP) {
+	return i.ID, i.TargetIP
 }
 
-func (I *ICMPResponse) GetInformation() (net.IP, fasttime.Time, int) {
-	return I.AddrIP, I.Received, I.Code
+func (i *ICMPResponse) GetInformation() (net.IP, fasttime.Time, int) {
+	return i.AddrIP, i.Received, i.Code
 }
 
-func (I *ICMPResponse) GetVerifier() any {
-	return I.Data
+func (i *ICMPResponse) GetVerifier() any {
+	return i.Data
 }
 
 // A RawResponse represents an ICMPResponse (TimeExceed or DstUnreachable) of none-ICMP request
@@ -245,7 +246,7 @@ func v4dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 				if _a, ok := resp.addr.(*net.IPAddr); ok {
 					ip = _a.IP
 				} else {
-					return
+					log.Panicf("Unexpected resp.addr: <%T>(%v)\n", resp.addr, resp.addr)
 				}
 				r := &ICMPResponse{
 					Received: resp.curr,
@@ -270,6 +271,9 @@ func v4dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 					return
 				case *icmp.TimeExceeded:
 					if msg.Code != 0 {
+						if Debug {
+							log.Printf("[DEBUG] Fragment reassembly time exceeded from %s\n", ip)
+						}
 						return
 					} // We don't care Code 1: Fragment reassembly time exceeded.
 					r.Code = 258
@@ -289,16 +293,25 @@ func v4dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 				// 20 bytes (In our case) IP Header of source message
 				// 8 bytes  Head of Payload msg (full Echo msg in our case)
 				if len(bodyData) < 28 {
+					if Debug {
+						log.Printf("[DEBUG] Response body from %s too short (%d < 28), can't recover source.\n", ip, len(bodyData))
+					}
 					return
 				}
 				head, err := ipv4.ParseHeader(bodyData[:20])
 				if err != nil {
+					if Debug {
+						log.Printf("[DEBUG] Corrupted ipv4 header in response body from %s: %s.\n", ip, err)
+					}
 					return
 				}
 				r.TargetIP = head.Dst.To16()
 				if head.Protocol == 1 { // iana.ProtocolICMP
 					msgSend, err := icmp.ParseMessage(1, bodyData[20:]) // iana.ProtocolICMP
 					if err != nil {
+						if Debug {
+							log.Printf("[DEBUG] Corrupted icmp header in response body from %s: %s.\n", ip, err)
+						}
 						return
 					}
 					// discard ICMP but not Echo message. That can't be response of our packets
@@ -307,6 +320,8 @@ func v4dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 						r.Seq = sendBody.Seq
 						r.Data = sendBody.Data
 						icmpResponse <- r
+					} else if Debug {
+						log.Printf("[DEBUG] Response body of a %T packet from %s ignored.\n", msgSend.Body, ip)
 					}
 				} else {
 					// request not ICMP Protocol. Let rawResponse dispatcher process it.
@@ -338,7 +353,7 @@ func v6dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 				if _a, ok := resp.addr.(*net.IPAddr); ok {
 					ip = _a.IP
 				} else {
-					return
+					log.Panicf("Unexpected resp.addr: <%T>(%v)\n", resp.addr, resp.addr)
 				}
 				r := &ICMPResponse{
 					Received: resp.curr,
@@ -363,6 +378,9 @@ func v6dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 					return
 				case *icmp.TimeExceeded:
 					if msg.Code != 0 {
+						if Debug {
+							log.Printf("[DEBUG] Fragment reassembly time exceeded from %s\n", ip)
+						}
 						return
 					} // We don't care Code 1: Fragment reassembly time exceeded.
 					r.Code = 258
@@ -382,16 +400,25 @@ func v6dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 				// 40 bytes (In our case) IPv6 Header of source message
 				// 8 bytes  Head of Payload msg (full Echo msg in our case)
 				if len(bodyData) < 48 {
+					if Debug {
+						log.Printf("[DEBUG] Response body from %s too short (%d < 48), can't recover source.\n", ip, len(bodyData))
+					}
 					return
 				}
 				head, err := ipv6.ParseHeader(bodyData[:40])
 				if err != nil {
+					if Debug {
+						log.Printf("[DEBUG] Corrupted ipv6 header in response body from %s: %s.\n", ip, err)
+					}
 					return
 				}
 				r.TargetIP = head.Dst.To16()
 				if head.NextHeader == 58 { // iana.ProtocolIPv6ICMP
 					msgSend, err := icmp.ParseMessage(58, bodyData[40:]) // iana.ProtocolIPv6ICMP
 					if err != nil {
+						if Debug {
+							log.Printf("[DEBUG] Corrupted icmp header in response body from %s: %s.\n", ip, err)
+						}
 						return
 					}
 					// discard ICMPv6 but not Echo message. That can't be response of our packets
@@ -400,6 +427,8 @@ func v6dispatcher(ctx context.Context, data chan *icmpReceived, icmpResponse cha
 						r.Seq = sendBody.Seq
 						r.Data = sendBody.Data
 						icmpResponse <- r
+					} else if Debug {
+						log.Printf("[DEBUG] Response body of a %T packet from %s ignored.\n", msgSend.Body, ip)
 					}
 				} else {
 					// request not ICMPv6 Protocol. Let rawResponse icmpDispatcher process it.
@@ -435,20 +464,12 @@ func GetICMPManager() *ICMPManager {
 		result6 := make(chan *ICMPResponse, 1024)
 		raw4 := make(chan *RawResponse, 1024)
 		raw6 := make(chan *RawResponse, 1024)
-		laddr := ""
-		if bind.LAddr4() != nil {
-			laddr = bind.LAddr4().String()
-		}
-		conn4, err := icmp.ListenPacket("ip4:icmp", laddr)
+		conn4, err := icmp.ListenPacket("ip4:icmp", bind.LAddr4().String())
 		if err != nil {
 			log.Fatalf("Can't listen to ICMP: %s\n", err)
 		}
 		manager.pConn4 = conn4
-		laddr = ""
-		if bind.LAddr6() != nil {
-			laddr = bind.LAddr6().String()
-		}
-		conn6, err := icmp.ListenPacket("ip6:ipv6-icmp", laddr)
+		conn6, err := icmp.ListenPacket("ip6:ipv6-icmp", bind.LAddr6().String())
 		if err != nil {
 			log.Fatalf("Can't listen to ICMPv6: %s\n", err)
 		}
@@ -460,10 +481,11 @@ func GetICMPManager() *ICMPManager {
 		go manager.icmpDispatcher(result4, result6)
 		go manager.rawDispatcher(raw4, raw6)
 		// warm-up
+		empty := make([]byte, 56)
 		addr, _ := net.ResolveIPAddr("", "127.0.0.1")
-		<-manager.Issue(addr, 100, time.Second, 0)
+		<-manager.Issue(addr, 100, time.Second, ICMPPayload{ID: 0, Seq: 0, Data: empty})
 		addr, _ = net.ResolveIPAddr("", "::1")
-		<-manager.Issue(addr, 100, time.Second, 0)
+		<-manager.Issue(addr, 100, time.Second, ICMPPayload{ID: 0, Seq: 0, Data: empty})
 
 		if Debug {
 			go func() {
@@ -479,7 +501,7 @@ func GetICMPManager() *ICMPManager {
 }
 
 // Issue an ICMP echo request. return a channel to send result back
-func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration, length int) (delivery chan *Result) {
+func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration, payload ICMPPayload) (delivery chan *Result) {
 	ipAddr, ok := ip.(*net.IPAddr)
 	if !ok {
 		return nil
@@ -491,44 +513,36 @@ func (mgr *ICMPManager) Issue(ip net.Addr, ttl int, timeout time.Duration, lengt
 	}
 	dest = ipAddr.IP.To16()
 
-	count := (atomic.AddUint32(&mgr.counter, 1) - 1) & 0xffff
-	id := rand.Intn(1 << 16)
-	var data []byte
-	if length > 0 {
-		data = make([]byte, length)
-		rand.Read(data)
+	if payload.ID == -1 {
+		payload.ID = rand.Intn(1 << 16)
+	}
+
+	if payload.Seq == -1 {
+		payload.Seq = int((atomic.AddUint32(&mgr.counter, 1) - 1) & 0xffff)
 	}
 
 	var msg []byte
+	echo := icmp.Message{
+		Code: 0,
+		Body: &icmp.Echo{
+			ID:   payload.ID,
+			Seq:  payload.Seq,
+			Data: payload.Data,
+		}}
+
 	if v4 {
-		echo := icmp.Message{
-			Type: ipv4.ICMPTypeEcho,
-			Code: 0,
-			Body: &icmp.Echo{
-				ID:   id,
-				Seq:  int(count),
-				Data: data,
-			}}
-		msg, _ = echo.Marshal(nil)
+		echo.Type = ipv4.ICMPTypeEcho
 	} else {
-		echo := icmp.Message{
-			Type: ipv6.ICMPTypeEchoRequest,
-			Code: 0,
-			Body: &icmp.Echo{
-				ID:   id,
-				Seq:  int(count),
-				Data: data,
-			}}
-		msg, _ = echo.Marshal(nil)
+		echo.Type = ipv6.ICMPTypeEchoRequest
 	}
 
+	msg, _ = echo.Marshal(nil)
+
 	delivery = make(chan *Result, 1)
-	mgr.queue.Set(int(count), &ICMPRequest{
-		Seq:      int(count),
-		ID:       id,
-		TargetIP: dest,
-		Data:     data,
-		delivery: delivery,
+	mgr.queue.Set((payload.ID<<16)|payload.Seq, &ICMPRequest{
+		ICMPPayload: payload,
+		TargetIP:    dest,
+		delivery:    delivery,
 	}, timeout)
 
 	if v4 {
@@ -569,10 +583,15 @@ func (mgr *ICMPManager) icmpDispatcher(v4, v6 chan *ICMPResponse) {
 		}
 
 		if response != nil {
-			if request, exists := mgr.queue.Get(response.Seq); exists {
+			key := response.ID<<16 | response.Seq
+			if request, exists := mgr.queue.Get(key); exists {
 				if request.Deliver(response) {
-					mgr.queue.Remove(response.Seq)
+					mgr.queue.Remove(key)
 				}
+			} else if Debug {
+				log.Printf("[DEBUG] Received ICMP response at %d not found in registry: "+
+					"From %s in response of icmp echo to %s, seq %d, id %d, code %d\n",
+					response.Received, response.AddrIP, response.TargetIP, response.Seq, response.ID, response.Code)
 			}
 		}
 

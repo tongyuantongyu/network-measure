@@ -88,12 +88,32 @@ func Parse(ips []string) error {
 	return nil
 }
 
-func LAddr4() *net.IPAddr {
-	return v4
+type IPAddr struct {
+	I *net.IPAddr
 }
 
-func LAddr6() *net.IPAddr {
-	return v6
+func (a IPAddr) String() string {
+	if a.I == nil {
+		return ""
+	}
+
+	return a.I.String()
+}
+
+func (a IPAddr) AsTCP() *net.TCPAddr {
+	if a.I == nil {
+		return nil
+	}
+
+	return &net.TCPAddr{IP: a.I.IP, Zone: a.I.Zone}
+}
+
+func LAddr4() IPAddr {
+	return IPAddr{I: v4}
+}
+
+func LAddr6() IPAddr {
+	return IPAddr{I: v6}
 }
 
 func Set() bool {

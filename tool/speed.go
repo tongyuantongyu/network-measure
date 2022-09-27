@@ -140,14 +140,15 @@ func Speed(q *SpeedQ, safe bool) (*SpeedP, error) {
 	var laddr net.Addr
 	if network != "tcp" {
 		fallbackDelay = -time.Millisecond
+
+		if network == "tcp4" {
+			laddr = bind.LAddr4().AsTCP()
+		} else if network == "tcp6" {
+			laddr = bind.LAddr6().AsTCP()
+		}
 	} else {
 		if bind.Set() {
 			return nil, errors.New("this instance explicitly binds to specific ip, but is unable to determine socket family to use")
-		}
-		if network == "tcp4" {
-			laddr = &net.TCPAddr{IP: bind.LAddr4().IP}
-		} else if network == "tcp6" {
-			laddr = &net.TCPAddr{IP: bind.LAddr6().IP, Zone: bind.LAddr6().Zone}
 		}
 	}
 

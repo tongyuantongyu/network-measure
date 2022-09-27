@@ -6,7 +6,7 @@ import datetime
 ver = subprocess.run("git describe --tags", shell=True, capture_output=True)
 ver = ver.stdout.decode().strip()
 
-full_ver = subprocess.run("git describe --always --dirty --long --tags", shell=True, capture_output=True)
+full_ver = subprocess.run("git describe --always --dirty --tags", shell=True, capture_output=True)
 full_ver = full_ver.stdout.decode().strip()
 
 cur = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
