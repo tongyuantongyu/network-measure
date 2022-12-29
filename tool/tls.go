@@ -225,6 +225,7 @@ func TLS(q *TlsQ) (*TlsP, error) {
 		cert := state.PeerCertificates[i-1]
 		hash := sha256.Sum256(cert.Raw)
 		data := Certificate{
+			Size:               len(cert.Raw),
 			Subject:            cert.Subject.String(),
 			Issuer:             cert.Issuer.String(),
 			NotBefore:          cert.NotBefore,

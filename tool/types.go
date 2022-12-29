@@ -153,6 +153,7 @@ const (
 )
 
 type Certificate struct {
+	Size  int  `json:"size,omitempty"`
 	Valid bool `json:"valid"`
 
 	Subject string `json:"subject"`
