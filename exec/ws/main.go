@@ -6,20 +6,23 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/gorilla/websocket"
 	json "github.com/json-iterator/go"
-	"io/ioutil"
-	"log"
-	"math/rand"
-	"net/http"
+
 	"network-measure/bind"
 	"network-measure/tool"
 	"network-measure/tool/icmp"
-	"os"
-	"time"
 )
 
 var config Config
@@ -237,6 +240,10 @@ func getUserAgent() string {
 }
 
 func main() {
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
+	//
 	var dialer = websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 		ReadBufferSize:   1048576,
@@ -265,7 +272,7 @@ func main() {
 				log.Printf("Can't establish connection to server %s: %s\n", config.Conn.Remote, err)
 				goto CleanUp
 			} else {
-				log.Fatalf("Can't establish connection to server %s: %s\n", config.Conn.Remote, err)
+				log.Fatalf("Can't establish connection to server %s: %s, Exit.\n", config.Conn.Remote, err)
 			}
 		}
 
@@ -279,7 +286,6 @@ func main() {
 			case <-tick.C:
 				_ = conn.WriteMessage(websocket.PingMessage, []byte("keep-alive"))
 			case <-stopper:
-				stopper <- struct{}{}
 				return
 			}
 		}()
@@ -296,7 +302,6 @@ func main() {
 						log.Printf("Failed writing response: %s\n", err)
 					}
 				case <-stopper:
-					stopper <- struct{}{}
 					return
 				}
 			}
@@ -318,10 +323,10 @@ func main() {
 			}
 
 			if t == websocket.CloseMessage {
-				payload, err := ioutil.ReadAll(r)
+				payload, err := io.ReadAll(r)
 				if err != nil {
 					log.Printf("Connection closed. Can't read reason: %s\n", err)
-					stopper <- struct{}{}
+					close(stopper)
 					goto CleanUp
 				}
 
@@ -361,7 +366,7 @@ func main() {
 					p := handler(reqBuffer)
 					select {
 					case <-stopper:
-						stopper <- struct{}{}
+						return
 					case pChan <- Response{
 						Type:    qType,
 						Payload: p,
@@ -374,12 +379,14 @@ func main() {
 		}
 
 	CleanUp:
+		close(stopper)
 		if conn != nil {
-			stopper <- struct{}{}
 			_ = conn.Close()
 		}
 		icmp.GetICMPManager().Flush()
 
-		time.Sleep(time.Duration(config.Conn.Interval) * time.Second)
+		interval := time.Duration(config.Conn.Interval) * time.Second
+		log.Printf("Wait %s before retry...\n", interval.String())
+		time.Sleep(interval)
 	}
 }
