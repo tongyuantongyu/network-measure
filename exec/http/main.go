@@ -29,13 +29,20 @@ var (
 func init() {
 	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
 	config.SetDefault()
-	if c, err := os.ReadFile("./config.toml"); err == nil {
+
+	var configFile = "./config.toml"
+	if len(os.Args) > 1 {
+		configFile = os.Args[1]
+	}
+	if c, err := os.ReadFile(configFile); err == nil {
 		if err = toml.Unmarshal(c, &config); err != nil {
 			log.Printf("Failed loading config: %s, use default settings.\n", err)
 			config.SetDefault()
 		} else {
 			log.Println("Config loaded.")
 		}
+	} else if len(os.Args) > 1 {
+		log.Fatalf("Can't open config for read: %s.\n", err)
 	} else {
 		log.Println("No config found. use default settings.")
 	}
@@ -248,14 +255,14 @@ func limit(enable bool) gin.HandlerFunc {
 	}
 }
 
-//func _(c *gin.Context) {
+// func _(c *gin.Context) {
 //	fmt.Printf("[DBG] %v | %15s | %-7s  %#v\n",
 //		time.Now().Format("2006/01/02 - 15:04:05"),
 //		c.ClientIP(),
 //		c.Request.Method,
 //		c.Request.URL.Path,
 //	)
-//}
+// }
 
 func main() {
 	router := gin.Default()
