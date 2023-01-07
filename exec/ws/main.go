@@ -212,6 +212,11 @@ func handleTLS(body []byte) (r []byte) {
 }
 
 func init() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println(fullVersion)
+		os.Exit(0)
+	}
+
 	log.Printf("network-measure Websocket %s, built at %s\n", fullVersion, buildDate)
 
 	config.SetDefault()
@@ -386,7 +391,9 @@ func main() {
 		}
 
 	CleanUp:
-		close(stopper)
+		if stopper != nil {
+			close(stopper)
+		}
 		if conn != nil {
 			_ = conn.Close()
 		}

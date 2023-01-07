@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -27,6 +28,11 @@ var (
 )
 
 func init() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println(fullVersion)
+		os.Exit(0)
+	}
+
 	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
 	config.SetDefault()
 
