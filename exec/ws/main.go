@@ -265,8 +265,10 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	retryCount := uint32(0)
+	established := false
 
 	for {
+		established = false
 		identifier := fmt.Sprintf("%s.%x.%x", config.Conn.Name, time.Now().Unix(), rand.Uint64())
 		header := http.Header{}
 		header.Set("User-Agent", getUserAgent())
@@ -325,6 +327,7 @@ func main() {
 		})
 
 		log.Printf("Connection to %s established.\n", config.Conn.Remote)
+		established = true
 
 	NextMsg:
 		for {
@@ -399,8 +402,10 @@ func main() {
 		}
 		icmp.GetICMPManager().Flush()
 
-		interval := time.Duration(config.Conn.Interval) * time.Second
-		log.Printf("Wait %s before retry...\n", interval.String())
-		time.Sleep(interval)
+		if !established {
+			interval := time.Duration(config.Conn.Interval) * time.Second
+			log.Printf("Wait %s before retry...\n", interval.String())
+			time.Sleep(interval)
+		}
 	}
 }

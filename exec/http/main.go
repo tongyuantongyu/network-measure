@@ -5,10 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/BurntSushi/toml"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/jellydator/ttlcache/v2"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,6 +13,11 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/BurntSushi/toml"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/jellydator/ttlcache/v2"
 )
 
 var config Config
@@ -28,18 +29,18 @@ var (
 )
 
 func init() {
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println(fullVersion)
-		os.Exit(0)
+	var configFile = "./config.toml"
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--version" {
+			fmt.Println(fullVersion)
+			os.Exit(0)
+		}
+		configFile = os.Args[1]
 	}
 
 	log.Printf("network-measure HTTP %s, built at %s\n", fullVersion, buildDate)
 	config.SetDefault()
 
-	var configFile = "./config.toml"
-	if len(os.Args) > 1 {
-		configFile = os.Args[1]
-	}
 	if c, err := os.ReadFile(configFile); err == nil {
 		if err = toml.Unmarshal(c, &config); err != nil {
 			log.Printf("Failed loading config: %s, use default settings.\n", err)
