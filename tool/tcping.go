@@ -76,7 +76,9 @@ func TCPing(q *TCPingQ) (*TCPingP, error) {
 			Success: err == nil,
 			Latency: float64(time.Since(now)) / float64(time.Millisecond),
 		})
-		_ = conn.Close()
+		if conn != nil {
+			_ = conn.Close()
+		}
 		timer.Stop()
 		cancel()
 		time.Sleep(time.Duration(q.Interval) * time.Millisecond)
